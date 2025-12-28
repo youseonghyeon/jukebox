@@ -9,6 +9,11 @@ spring:
       mode: always
       schema-locations: classpath:sql/schema.sql
 
+jukebox:
+  dataset:
+    enabled: true
+    location: ../data/spotify_dataset.json
+
 logging:
   level:
     org.springframework.data.r2dbc: DEBUG
