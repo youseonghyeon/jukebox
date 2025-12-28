@@ -5,7 +5,6 @@ import com.seonghyeon.jukebox.dataloader.dto.SongDto;
 import com.seonghyeon.jukebox.entity.SimilarSongEntity;
 import com.seonghyeon.jukebox.entity.SongEntity;
 import com.seonghyeon.jukebox.entity.SongMetricsEntity;
-import com.seonghyeon.jukebox.repository.SongRepository;
 import io.r2dbc.spi.Statement;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
@@ -28,96 +27,96 @@ public class SongBatchWriter {
     private final TransactionalOperator transactionalOperator;
     private final R2dbcEntityTemplate template;
 
+    // [Songs Table]
+    private static final String SONGS_TABLE = "songs";
+    private static final String SONGS_COLUMNS = "(id, artist, title, album, release_date, release_year, genre, lyrics, length, emotion, total_likes)";
+    private static final String SONGS_PLACEHOLDERS = makePlaceholders(11);
+
+    // [Song Metrics Table]
+    private static final String METRICS_TABLE = "song_metrics";
+    private static final String METRICS_COLUMNS = "(song_id, musical_key, tempo, loudness_db, time_signature, explicit, popularity, energy, danceability, positiveness, speechiness, liveness, acousticness, instrumentalness, is_party, is_study, is_relaxation, is_exercise, is_running, is_yoga, is_driving, is_social, is_morning)";
+    private static final String METRICS_PLACEHOLDERS = makePlaceholders(23);
+
+    // [Similar Songs Table]
+    private static final String SIMILAR_TABLE = "similar_songs";
+    private static final String SIMILAR_COLUMNS = "(song_id, similar_artist, similar_title, similarity_score)";
+    private static final String SIMILAR_PLACEHOLDERS = makePlaceholders(4);
+
+    /**
+     * SongDto 리스트를 받아 songs, song_metrics, similar_songs 테이블에 일괄 삽입
+     *
+     * @param songDtoList
+     */
     public void flushAll(List<SongDto> songDtoList) {
         Mono<Void> flushProcess = Flux.fromIterable(songDtoList)
-                .flatMap(dto -> Mono.just(new WithId(TsidCreator.getTsid256().toLong(), dto)))
+                .map(dto -> new IdentifiedSong(TsidCreator.getTsid256().toLong(), dto))
                 .buffer(1000)
-                .flatMap(list -> insertAll(list).then(Mono.defer(() -> saveChildEntities(list))), 30)
+                .flatMap(list -> insertAllSongs(list).then(Mono.defer(() -> insertChildEntities(list))), 4)
                 .then();
-        transactionalOperator.transactional(flushProcess).block(); // 동기화
+
+        transactionalOperator.transactional(flushProcess).block();
     }
 
-    record WithId(Long songId, SongDto songDto) {
+    record IdentifiedSong(Long id, SongDto dto) {
     }
 
-    private Mono<Void> insertAll(List<WithId> songList) {
-        String placeholders = "(" + String.join(", ", Collections.nCopies(11, "?")) + ")";
-
-        // 2. 전체 VALUES 절 생성: (?, ...), (?, ...)
-        String valueClause = IntStream.range(0, songList.size())
-                .mapToObj(i -> placeholders)
-                .collect(Collectors.joining(", "));
-
-        String sql = "INSERT INTO songs " +
-                     "(id, artist, title, album, release_date, release_year, genre, lyrics, length, emotion, total_likes) " +
-                     "VALUES " + valueClause;
+    private Mono<Void> insertAllSongs(List<IdentifiedSong> batch) {
+        if (batch.isEmpty()) return Mono.empty();
+        String sql = buildBulkInsertSql(SONGS_TABLE, SONGS_COLUMNS, SONGS_PLACEHOLDERS, batch.size());
 
         return template.getDatabaseClient().inConnection(connection -> {
             Statement statement = connection.createStatement(sql);
             int idx = 0;
-            for (WithId song : songList) {
-                SongEntity songe = SongEntity.fromDto(song.songDto());
-                bindNext(statement, idx++, song.songId(), Long.class);
-                bindNext(statement, idx++, songe.artist(), String.class);
-                bindNext(statement, idx++, songe.title(), String.class);
-                bindNext(statement, idx++, songe.album(), String.class);
-                bindNext(statement, idx++, songe.releaseDate(), LocalDate.class);
-                bindNext(statement, idx++, songe.releaseYear(), Integer.class);
-                bindNext(statement, idx++, songe.genre(), String.class);
-                bindNext(statement, idx++, songe.lyrics(), String.class);
-                bindNext(statement, idx++, songe.length(), String.class);
-                bindNext(statement, idx++, songe.emotion(), String.class);
-                bindNext(statement, idx++, (songe.totalLikes() != null ? songe.totalLikes() : 0L), Long.class);
+            for (IdentifiedSong identifiedSong : batch) {
+                SongEntity s = SongEntity.fromDto(identifiedSong.dto());
+                bindNext(statement, idx++, identifiedSong.id(), Long.class);
+                bindNext(statement, idx++, s.artist(), String.class);
+                bindNext(statement, idx++, s.title(), String.class);
+                bindNext(statement, idx++, s.album(), String.class);
+                bindNext(statement, idx++, s.releaseDate(), LocalDate.class);
+                bindNext(statement, idx++, s.releaseYear(), Integer.class);
+                bindNext(statement, idx++, s.genre(), String.class);
+                bindNext(statement, idx++, s.lyrics(), String.class);
+                bindNext(statement, idx++, s.length(), String.class);
+                bindNext(statement, idx++, s.emotion(), String.class);
+                bindNext(statement, idx++, (s.totalLikes() != null ? s.totalLikes() : 0L), Long.class);
             }
-            statement.returnGeneratedValues("id");
             return Flux.from(statement.execute()).then();
         });
     }
 
-    private Mono<Void> saveChildEntities(List<WithId> pairs) {
-        int size = pairs.size();
+    private Mono<Void> insertChildEntities(List<IdentifiedSong> batch) {
+        if (batch.isEmpty()) return Mono.empty();
+
+        int size = batch.size();
         List<SongMetricsEntity> metricsList = new ArrayList<>(size);
         List<SimilarSongEntity> similarList = new ArrayList<>(size * 3);
 
-        for (WithId pair : pairs) {
-            SongDto songDto = pair.songDto();
-            Long songId = pair.songId();
+        for (IdentifiedSong song : batch) {
+            SongDto dto = song.dto();
+            Long id = song.id();
 
-            metricsList.add(SongMetricsEntity.fromDto(songDto, songId));
-            if (songDto.similarSongs() != null) {
-                songDto.similarSongs().forEach(similarDto ->
-                        similarList.add(SimilarSongEntity.fromDto(similarDto, songId))
-                );
+            metricsList.add(SongMetricsEntity.fromDto(dto, id));
+
+            if (dto.similarSongs() != null) {
+                for (var similarDto : dto.similarSongs()) {
+                    similarList.add(SimilarSongEntity.fromDto(similarDto, id));
+                }
             }
         }
-
         return Mono.when(
-                batchInsertMetrics(metricsList),
-                batchInsertSimilars(similarList)
+                insertAllMetrics(metricsList),
+                insertAllSimilars(similarList)
         ).then();
     }
 
-    // =================================================================================
-    // 1. Song Metrics Batch Insert (Multi-row)
-    // =================================================================================
-    private Mono<Void> batchInsertMetrics(List<SongMetricsEntity> metricsList) {
+    private Mono<Void> insertAllMetrics(List<SongMetricsEntity> metricsList) {
         if (metricsList.isEmpty()) return Mono.empty();
-
-        // 23개의 파라미터 홀더 (?, ?, ... ) 생성
-        String placeholders = "(" + String.join(", ", Collections.nCopies(23, "?")) + ")";
-
-        // 전체 VALUES 절 생성: (?, ...), (?, ...)
-        String valueClause = IntStream.range(0, metricsList.size())
-                .mapToObj(i -> placeholders)
-                .collect(Collectors.joining(", "));
-
-        String sql = "INSERT INTO song_metrics " +
-                     "(song_id, musical_key, tempo, loudness_db, time_signature, explicit, popularity, energy, danceability, positiveness, speechiness, liveness, acousticness, instrumentalness, is_party, is_study, is_relaxation, is_exercise, is_running, is_yoga, is_driving, is_social, is_morning) " +
-                     "VALUES " + valueClause;
+        String sql = buildBulkInsertSql(METRICS_TABLE, METRICS_COLUMNS, METRICS_PLACEHOLDERS, metricsList.size());
 
         return template.getDatabaseClient().inConnection(connection -> {
             Statement statement = connection.createStatement(sql);
-            int idx = 0; // 전체 파라미터 인덱스
+            int idx = 0;
 
             for (SongMetricsEntity m : metricsList) {
                 bindNext(statement, idx++, m.songId(), Long.class);
@@ -134,8 +133,6 @@ public class SongBatchWriter {
                 bindNext(statement, idx++, m.liveness(), Integer.class);
                 bindNext(statement, idx++, m.acousticness(), Integer.class);
                 bindNext(statement, idx++, m.instrumentalness(), Integer.class);
-
-                // Boolean 필드 (MySQL 등에서는 0/1로 변환되거나 드라이버가 처리)
                 bindNext(statement, idx++, m.isParty(), Boolean.class);
                 bindNext(statement, idx++, m.isStudy(), Boolean.class);
                 bindNext(statement, idx++, m.isRelaxation(), Boolean.class);
@@ -151,36 +148,31 @@ public class SongBatchWriter {
         });
     }
 
-    // =================================================================================
-    // 2. Similar Songs Batch Insert (Multi-row)
-    // =================================================================================
-    private Mono<Void> batchInsertSimilars(List<SimilarSongEntity> similarList) {
+    private Mono<Void> insertAllSimilars(List<SimilarSongEntity> similarList) {
         if (similarList.isEmpty()) return Mono.empty();
-
-        // 4개의 파라미터 홀더 (?, ?, ?, ?)
-        String placeholders = "(?, ?, ?, ?)";
-
-        String valueClause = IntStream.range(0, similarList.size())
-                .mapToObj(i -> placeholders)
-                .collect(Collectors.joining(", "));
-
-        String sql = "INSERT INTO similar_songs " +
-                     "(song_id, similar_artist, similar_title, similarity_score) " +
-                     "VALUES " + valueClause;
+        String sql = buildBulkInsertSql(SIMILAR_TABLE, SIMILAR_COLUMNS, SIMILAR_PLACEHOLDERS, similarList.size());
 
         return template.getDatabaseClient().inConnection(connection -> {
             Statement statement = connection.createStatement(sql);
             int idx = 0;
-
             for (SimilarSongEntity s : similarList) {
                 bindNext(statement, idx++, s.songId(), Long.class);
                 bindNext(statement, idx++, s.similarArtist(), String.class);
                 bindNext(statement, idx++, s.similarTitle(), String.class);
                 bindNext(statement, idx++, s.similarityScore(), Double.class);
             }
-
             return Flux.from(statement.execute()).then();
         });
+    }
+
+    // ---------- Helper Methods ----------
+
+    private String buildBulkInsertSql(String table, String columns, String placeholders, int count) {
+        // IntStream 대신 단순 String 반복으로도 충분하지만, 지금 방식도 좋습니다.
+        String values = IntStream.range(0, count)
+                .mapToObj(i -> placeholders)
+                .collect(Collectors.joining(", "));
+        return "INSERT INTO " + table + " " + columns + " VALUES " + values;
     }
 
     private void bindNext(Statement statement, int index, Object value, Class<?> type) {
@@ -189,5 +181,9 @@ public class SongBatchWriter {
         } else {
             statement.bind(index, value);
         }
+    }
+
+    private static String makePlaceholders(int parmCount) {
+        return "(" + String.join(", ", Collections.nCopies(parmCount, "?")) + ")";
     }
 }

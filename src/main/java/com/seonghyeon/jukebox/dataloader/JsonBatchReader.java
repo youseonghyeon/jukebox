@@ -59,7 +59,6 @@ public class JsonBatchReader {
                 callback.accept(chunk);
                 processCount += chunk.size();
                 log.info("Processing batch chunk. processedCount={}", processCount);
-                chunk.clear();
             }
         } catch (IOException e) {
             log.error("Error reading JSON file and, process callback", e);
