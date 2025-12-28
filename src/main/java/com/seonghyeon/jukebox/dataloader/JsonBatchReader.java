@@ -47,7 +47,7 @@ public class JsonBatchReader {
                 skipped++;
             }
             if (skipped > 0) {
-                log.info("기존 처리 내역 {}건을 건너뛰었습니다. (Resume)", skipped);
+                log.info("Skipped {} existing records (Resume mode).", skipped);
             }
 
             List<E> chunk = new ArrayList<>(batchSize);
@@ -58,7 +58,7 @@ public class JsonBatchReader {
                 if (chunk.size() >= batchSize) {
                     callback.accept(chunk);
                     processCount += chunk.size();
-                    log.info("처리된 데이터 건수: {}", processCount);
+                    log.info("Successfully processed {} records.", processCount);
                     chunk.clear(); // callback 동기 호출 (메모리 재사용)
 //                    chunk = new ArrayList<>(batchSize); // callback 비동기 호출
                 }
@@ -67,7 +67,7 @@ public class JsonBatchReader {
             if (!chunk.isEmpty()) {
                 callback.accept(chunk);
                 processCount += chunk.size();
-                log.info("처리된 데이터 건수: {}", processCount);
+                log.info("Successfully processed {} records.", processCount);
             }
         } catch (IOException e) {
             log.error("Error reading JSON file and, process callback", e);

@@ -43,9 +43,18 @@ public class SongBatchWriter {
     private static final String SIMILAR_PLACEHOLDERS = makePlaceholders(4);
 
     /**
-     * SongDto 리스트를 받아 songs, song_metrics, similar_songs 테이블에 일괄 삽입
+     * 수집된 {@link SongDto} 리스트를 대용량 배치(Batch) 방식으로 데이터베이스에 영속화합니다.
+     * * <p>성능 최적화를 위해 다음과 같은 전략을 사용합니다:
+     * <ul>
+     * <li><b>Multi-row Insert:</b> 각 테이블당 1,000건씩 묶어 단일 SQL 문으로 실행하여 네트워크 I/O 오버헤드를 최소화합니다.</li>
+     * <li><b>Concurrency Control:</b> {@code flatMap}의 동시성 계수를 4로 설정하여 CPU 및 커넥션 자원을 효율적으로 분배합니다.</li>
+     * <li><b>Transactional Integrity:</b> 부모(Songs)와 자식(Metrics, Similars) 엔티티 간의 원자성을 {@link TransactionalOperator}로 보장합니다.</li>
+     * </ul>
+     * * <p>이 메서드는 비동기 파이프라인으로 구성되어 있으나, 호출부(가상 스레드)에서의
+     * 순차적 흐름 제어를 위해 마지막에 {@code .block()}을 수행합니다.</p>
      *
-     * @param songDtoList
+     * @param songDtoList 저장할 노래 데이터 리스트
+     * @throws RuntimeException 데이터베이스 삽입 중 오류 발생 시 해당 chunk가 롤백됩니다.
      */
     public void flushAll(List<SongDto> songDtoList) {
         Mono<Void> flushProcess = Flux.fromIterable(songDtoList)
@@ -168,7 +177,6 @@ public class SongBatchWriter {
     // ---------- Helper Methods ----------
 
     private String buildBulkInsertSql(String table, String columns, String placeholders, int count) {
-        // IntStream 대신 단순 String 반복으로도 충분하지만, 지금 방식도 좋습니다.
         String values = IntStream.range(0, count)
                 .mapToObj(i -> placeholders)
                 .collect(Collectors.joining(", "));
