@@ -3,6 +3,8 @@ spring:
     url: r2dbc:mysql://localhost:13306/jukebox_db
     username: user
     password: password
+    pool:
+      max-size: 70
 
   sql:
     init:

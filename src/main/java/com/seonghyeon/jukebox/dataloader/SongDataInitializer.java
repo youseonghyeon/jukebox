@@ -21,12 +21,13 @@ public class SongDataInitializer implements ApplicationRunner {
     private String dataSetLocation;
 
     private final JsonBatchReader jsonBatchReader;
+    private final SongBatchWriter songBatchWriter;
 
     @Override
     public void run(ApplicationArguments args) {
         if (dataSetEnabled) {
             Path path = Path.of(dataSetLocation);
-            Thread.ofVirtual().name("data-init-worker").start(() -> jsonBatchReader.read(path, list -> System.out.println(list.size()), 1000));
+            Thread.ofVirtual().name("data-init-worker").start(() -> jsonBatchReader.read(path, songBatchWriter::flushAll, 3000));
         } else {
             log.info("Dataset loading is disabled. (jukebox.dataset.enabled: false)");
         }
