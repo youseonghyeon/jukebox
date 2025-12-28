@@ -1,5 +1,6 @@
 package com.seonghyeon.jukebox.dataloader;
 
+import com.seonghyeon.jukebox.dataloader.dto.SongDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -27,7 +28,7 @@ public class SongDataInitializer implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         if (dataSetEnabled) {
             Path path = Path.of(dataSetLocation);
-            Thread.ofVirtual().name("data-init-worker").start(() -> jsonBatchReader.read(path, songBatchWriter::flushAll, 1000));
+            Thread.ofVirtual().name("data-init-worker").start(() -> jsonBatchReader.process(path, songBatchWriter::flushAll, 1000, SongDto.class, 0));
         } else {
             log.info("Dataset loading is disabled. (jukebox.dataset.enabled: false)");
         }
