@@ -5,6 +5,7 @@ import com.seonghyeon.jukebox.dataloader.dto.SongDto;
 import com.seonghyeon.jukebox.repository.SimilarSongRepository;
 import com.seonghyeon.jukebox.repository.SongMetricsRepository;
 import com.seonghyeon.jukebox.repository.SongRepository;
+import com.seonghyeon.jukebox.repository.SongStatisticsRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -43,15 +44,19 @@ class SongBatchWriterTest {
     @Autowired
     private R2dbcEntityTemplate r2dbcEntityTemplate;
 
+    @Autowired
+    private SongStatisticsRepository songStatisticsRepository;
+
     @BeforeEach
     void cleanup() {
         // 외래키 제약 조건을 고려하여 자식 테이블부터 삭제
         var deleteSimilars = r2dbcEntityTemplate.getDatabaseClient().sql("DELETE FROM similar_songs").fetch().rowsUpdated();
         var deleteMetrics = r2dbcEntityTemplate.getDatabaseClient().sql("DELETE FROM song_metrics").fetch().rowsUpdated();
         var deleteSongs = r2dbcEntityTemplate.getDatabaseClient().sql("DELETE FROM songs").fetch().rowsUpdated();
+        var deleteStatistics = r2dbcEntityTemplate.getDatabaseClient().sql("DELETE FROM song_statistics").fetch().rowsUpdated();
 
         // 순차적으로 실행하여 데이터 삭제 완료 보장
-        deleteSimilars.then(deleteMetrics).then(deleteSongs)
+        deleteSimilars.then(deleteMetrics).then(deleteSongs).then(deleteStatistics)
                 .as(StepVerifier::create)
                 .expectNextCount(1) // 각 삭제 쿼리가 성공했는지 확인 (결과값은 삭제된 로우 수)
                 .verifyComplete();
@@ -205,7 +210,6 @@ class SongBatchWriterTest {
                     assertThat(s.title()).isEqualTo("Test Title");
                     assertThat(s.album()).isEqualTo("Test Album");
                     assertThat(s.releaseDate()).isEqualTo(java.time.LocalDate.parse("2023-12-25"));
-                    assertThat(s.releaseYear()).isEqualTo(2023);
                     assertThat(s.genre()).isEqualTo("Rock");
                     assertThat(s.lyrics()).isEqualTo("Test Lyrics");
                     assertThat(s.length()).isEqualTo("03:10");
@@ -257,6 +261,90 @@ class SongBatchWriterTest {
                     assertThat(sim.similarityScore()).isEqualTo(0.89);
                 })
                 .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("원본 노래 데이터를 기반으로 연도/가수별 통계 테이블이 올바르게 재구축되어야 한다")
+    void buildYearArtistStatsTest() {
+        // given: 다양한 연도와 가수가 섞인 테스트 데이터 생성 및 삽입
+        // 2023년 Artist A: 2곡, 2023년 Artist B: 1곡, 2022년 Artist A: 1곡
+        List<SongDto> testData = List.of(
+                createMockDataWithYearAndArtist("2023-01-01", "Artist A", "Title 1"),
+                createMockDataWithYearAndArtist("2023-05-20", "Artist A", "Title 2"),
+                createMockDataWithYearAndArtist("2023-11-15", "Artist B", "Title 3"),
+                createMockDataWithYearAndArtist("2022-03-10", "Artist A", "Title 4")
+        );
+        songBatchWriter.flushAll(testData);
+
+        // when: 통계 재구축 로직 실행
+        songStatisticsRepository.buildYearArtistStats().block();
+
+        // then: 통계 테이블(song_statistics) 검증
+        // 1. 전체 그룹 개수 확인 (2023-A, 2023-B, 2022-A 총 3개 그룹)
+        songStatisticsRepository.count()
+                .as(StepVerifier::create)
+                .expectNext(3L)
+                .verifyComplete();
+
+        // 2. 특정 그룹의 집계 데이터 정확성 확인 (2023년 Artist A는 2곡이어야 함)
+        songStatisticsRepository.findAll()
+                .filter(stat -> stat.releaseYear() == 2023 && "Artist A".equals(stat.artist()))
+                .next()
+                .as(StepVerifier::create)
+                .assertNext(stat -> {
+                    assertThat(stat.albumCount()).isEqualTo(2L);
+                })
+                .verifyComplete();
+
+        // 3. 2022년 데이터 확인
+        songStatisticsRepository.findAll()
+                .filter(stat -> stat.releaseYear() == 2022)
+                .next()
+                .as(StepVerifier::create)
+                .assertNext(stat -> {
+                    assertThat(stat.artist()).isEqualTo("Artist A");
+                    assertThat(stat.albumCount()).isEqualTo(1L);
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("발매일(release_date)이 null인 노래는 통계 집계에서 제외되어야 한다")
+    void excludeNullReleaseDateTest() {
+        // given: 정상 데이터 1건과 날짜가 null인 데이터 1건 준비
+        SongDto normalSong = createMockDataWithYearAndArtist("2023-01-01", "Artist A", "Normal Song");
+        SongDto nullDateSong = createMockDataWithYearAndArtist(null, "Artist A", "Null Date Song");
+
+        songBatchWriter.flushAll(List.of(normalSong, nullDateSong));
+
+        // when: 통계 재구축 실행
+        songStatisticsRepository.buildYearArtistStats().block();
+
+        // then: 통계 테이블 검증
+        songStatisticsRepository.findAll()
+                .filter(stat -> "Artist A".equals(stat.artist()))
+                .collectList()
+                .as(StepVerifier::create)
+                .assertNext(list -> {
+                    // 전체 그룹은 1개여야 함 (2023년 Artist A)
+                    assertThat(list).hasSize(1);
+                    // 날짜가 null인 데이터는 집계되지 않아 albumCount가 1이어야 함 (2가 아니라)
+                    assertThat(list.get(0).albumCount()).isEqualTo(1L);
+                    assertThat(list.get(0).releaseYear()).isEqualTo(2023);
+                })
+                .verifyComplete();
+    }
+
+    // 테스트용 헬퍼 메서드: 특정 날짜와 가수를 지정하여 DTO 생성
+    private SongDto createMockDataWithYearAndArtist(String date, String artist, String title) {
+        return new SongDto(
+                artist, title, "Lyrics...", "03:00",
+                "happy", "Pop", "Album X", date,
+                "C Major", 120.0, -5.0, "4/4", "No",
+                50, 50, 50, 50, 50, 50, 50, 50,
+                0, 0, 0, 0, 0, 0, 0, 0, 0,
+                Collections.emptyList()
+        );
     }
 
     // --- Helper ---

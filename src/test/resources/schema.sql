@@ -8,7 +8,6 @@ create table songs
     title        varchar(255)                        null,
     album        varchar(255)                        null,
     release_date date                                null,
-    release_year int                                 null,
     genre        varchar(100)                        null,
     lyrics       mediumtext                          null,
     length       varchar(10)                         null,
@@ -16,9 +15,6 @@ create table songs
     total_likes  bigint    default 0                 null,
     created_at   timestamp default CURRENT_TIMESTAMP null
 );
-
-create index idx_songs_year_artist
-    on songs (release_year desc, artist(100) asc);
 
 drop table if exists song_metrics;
 create table if not exists song_metrics
@@ -67,5 +63,19 @@ create table similar_songs
 
 create index song_id
     on similar_songs (song_id);
+
+drop table if exists song_statistics;
+
+create table song_statistics
+(
+    id           bigint auto_increment
+        primary key,
+    release_year int           not null,
+    artist       varchar(1000) not null,
+    album_count  int           not null
+);
+
+create index idx_stats_year_album_count
+    on song_statistics (release_year desc, album_count desc);
 
 SET foreign_key_checks = 1;
