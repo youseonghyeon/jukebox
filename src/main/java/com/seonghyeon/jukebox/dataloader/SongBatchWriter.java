@@ -57,6 +57,9 @@ public class SongBatchWriter {
      * @throws RuntimeException 데이터베이스 삽입 중 오류 발생 시 해당 chunk가 롤백됩니다.
      */
     public void flushAll(List<SongDto> songDtoList) {
+        if (songDtoList == null) throw new IllegalArgumentException("songDtoList cannot be null");
+        if (songDtoList.isEmpty()) return;
+
         Mono<Void> flushProcess = Flux.fromIterable(songDtoList)
                 .map(dto -> new IdentifiedSong(TsidCreator.getTsid256().toLong(), dto))
                 .buffer(1000)

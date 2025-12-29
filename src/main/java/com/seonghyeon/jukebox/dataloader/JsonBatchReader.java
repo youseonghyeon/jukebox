@@ -24,11 +24,16 @@ public class JsonBatchReader {
     private final ObjectMapper objectMapper;
 
     public <E> void process(Path path, Consumer<List<E>> callback, int batchSize, Class<E> targetType, long skipCount) {
-        long startMillis = System.currentTimeMillis();
-        long processCount = 0;
+        if (path == null) throw new IllegalArgumentException("Path must not be null.");
+        if (callback == null) throw new IllegalArgumentException("Callback must not be null.");
+        if (targetType == null) throw new IllegalArgumentException("Target type must not be null.");
+
         if (!Files.exists(path)) throw new IllegalArgumentException("File not found. path: " + path);
         if (batchSize <= 0) throw new IllegalArgumentException("Batch size must be greater than zero.");
         if (skipCount < 0) throw new IllegalArgumentException("Skip count cannot be negative.");
+
+        long startMillis = System.currentTimeMillis();
+        long processCount = 0;
 
         try (InputStream is = Files.newInputStream(path);
              JsonParser parser = objectMapper.createParser(is);

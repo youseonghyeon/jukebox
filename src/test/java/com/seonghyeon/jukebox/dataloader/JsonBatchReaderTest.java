@@ -139,8 +139,8 @@ class JsonBatchReaderTest {
 
     @Test
     @DisplayName("실제 JSON 파일(5건)을 SongDto로 매핑하여 배치 처리")
-        // 실제 데이터 기반 테스트
     void process_real_data_with_song_dto() throws IOException {
+        // 실제 데이터 기반 테스트
         // given
         Path jsonFile = createRealDataFile("real_songs.json");
         List<List<SongDto>> capturedBatches = new ArrayList<>();
@@ -219,7 +219,6 @@ class JsonBatchReaderTest {
 
         // when
         // Jackson 버전에 따라 0byte는 파싱 에러가 날 수도 있고, null로 끝날 수도 있음.
-        // 현재 구현 코드 로직상 parser.nextToken()에서 null이 나오면 조용히 끝나는지 확인 필요.
         jsonBatchReader.process(emptyFile, captured::add, 10, TestData.class, 0);
 
         // then
@@ -267,10 +266,68 @@ class JsonBatchReaderTest {
         assertThat(capturedBatches.get(2)).isNotEmpty();
     }
 
+    @Test
+    @DisplayName("파라미터가 null이면 IllegalArgumentException 발생")
+    void throw_exception_when_parameters_are_null() throws IOException {
+        // given
+        Path jsonFile = createJsonFile("null_params.json", List.of(new TestData(1, "a")));
+
+        // when & then
+        assertThatThrownBy(() ->
+                jsonBatchReader.process(null, list -> {
+                }, 10, TestData.class, 0)
+        )
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Path must not be null");
+
+        assertThatThrownBy(() ->
+                jsonBatchReader.process(jsonFile, null, 10, TestData.class, 0)
+        )
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Callback must not be null");
+
+        assertThatThrownBy(() ->
+                jsonBatchReader.process(jsonFile, list -> {
+                }, 10, null, 0)
+        )
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Target type must not be null");
+    }
+
+    @Test
+    @DisplayName("skipCount가 음수이면 IllegalArgumentException 발생")
+    void throw_exception_when_skip_count_is_negative() throws IOException {
+        // given
+        Path jsonFile = createJsonFile("negative_skip.json", List.of(new TestData(1, "a")));
+
+        // when & then
+        assertThatThrownBy(() ->
+                jsonBatchReader.process(jsonFile, list -> {
+                }, 10, TestData.class, -5)
+        )
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Skip count cannot be negative");
+    }
+
+    @Test
+    @DisplayName("배치 사이즈가 0이면 IllegalArgumentException 발생")
+    void throw_exception_when_batch_size_is_zero() throws IOException {
+        // given
+        Path jsonFile = createJsonFile("zero_batch_size.json", List.of(new TestData(1, "a")));
+
+        // when & then
+        assertThatThrownBy(() ->
+                jsonBatchReader.process(jsonFile, list -> {
+                }, 0, TestData.class, 0)
+        )
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Batch size must be greater than zero");
+    }
+
     // --- Helper Method ---
     private Path createJsonFile(String fileName, List<TestData> data) throws IOException {
         Path path = tempDir.resolve(fileName);
-        // ObjectMapper로 실제 JSON 파일 생성
+        // ObjectMapper로 JSON 파일 생성
         objectMapper.writeValue(path.toFile(), data);
         return path;
     }

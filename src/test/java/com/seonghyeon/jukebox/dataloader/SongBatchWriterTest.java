@@ -57,7 +57,7 @@ class SongBatchWriterTest {
                 .verifyComplete();
     }
 
-    // 1. MySQL 컨테이너 설정
+    // Testcontainers를 이용한 MySQL 임베디드 컨테이너 설정
     @Container
     static MySQLContainer<?> mysql = new MySQLContainer<>("mysql:8.0")
             .withDatabaseName("testdb")
