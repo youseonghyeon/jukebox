@@ -16,7 +16,6 @@ public record SongEntity(
         String title,
         String album,
         @Column("release_date") LocalDate releaseDate,
-        @Column("release_year") Integer releaseYear,
         String genre,
         String lyrics,
         String length,
@@ -26,14 +25,12 @@ public record SongEntity(
 
     public static SongEntity fromDto(SongDto dto) {
         LocalDate releaseDate = convertReleaseDate(dto.releaseDate());
-        Integer releaseYear = (releaseDate != null) ? releaseDate.getYear() : null;
         return new SongEntity(
                 null,
                 dto.artists(),
                 dto.song(),
                 dto.album(),
                 releaseDate,
-                releaseYear,
                 dto.genre(),
                 dto.text(),
                 dto.length(),
