@@ -3,11 +3,18 @@ spring:
     url: r2dbc:mysql://localhost:13306/jukebox_db
     username: user
     password: password
+    pool:
+      max-size: 70
 
   sql:
     init:
       mode: always
       schema-locations: classpath:sql/schema.sql
+
+jukebox:
+  dataset:
+    enabled: true
+    location: ../data/spotify_dataset.json
 
 logging:
   level:
