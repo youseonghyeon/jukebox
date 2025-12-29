@@ -6,7 +6,7 @@ import org.springframework.data.r2dbc.repository.Query;
 import org.springframework.data.r2dbc.repository.R2dbcRepository;
 import reactor.core.publisher.Mono;
 
-public interface SongStatisticsRepository extends R2dbcRepository<SongStatisticsEntity, Long> {
+public interface SongStatisticsRepository extends R2dbcRepository<SongStatisticsEntity, Long>, SongStatisticsCustomRepository {
 
     @Modifying
     @Query("""
@@ -17,4 +17,5 @@ public interface SongStatisticsRepository extends R2dbcRepository<SongStatistics
         GROUP BY YEAR(release_date), artist
     """)
     Mono<Long> buildYearArtistStats();
+
 }

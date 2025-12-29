@@ -1,5 +1,6 @@
 package com.seonghyeon.jukebox.dataloader;
 
+import com.seonghyeon.jukebox.AbstractIntegrationTest;
 import com.seonghyeon.jukebox.dataloader.dto.SimilarSongDto;
 import com.seonghyeon.jukebox.dataloader.dto.SongDto;
 import com.seonghyeon.jukebox.repository.SimilarSongRepository;
@@ -10,13 +11,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 import reactor.test.StepVerifier;
 
 import java.util.Collections;
@@ -25,9 +20,7 @@ import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@Testcontainers
-@SpringBootTest
-class SongBatchWriterTest {
+class SongBatchWriterTest extends AbstractIntegrationTest {
 
     @Autowired
     private SongRepository songRepository;
@@ -60,31 +53,6 @@ class SongBatchWriterTest {
                 .as(StepVerifier::create)
                 .expectNextCount(1) // 각 삭제 쿼리가 성공했는지 확인 (결과값은 삭제된 로우 수)
                 .verifyComplete();
-    }
-
-    // Testcontainers를 이용한 MySQL 임베디드 컨테이너 설정
-    @Container
-    static MySQLContainer<?> mysql = new MySQLContainer<>("mysql:8.0")
-            .withDatabaseName("testdb")
-            .withUsername("test")
-            .withPassword("test")
-            .withInitScript("schema.sql")
-            .withUrlParam("ssl", "false")
-            .withUrlParam("allowPublicKeyRetrieval", "true")
-            .withCommand(
-                    "--character-set-server=utf8mb4",
-                    "--collation-server=utf8mb4_unicode_ci",
-                    "--default-authentication-plugin=mysql_native_password"
-            );
-
-    // R2DBC 연결 설정 주입
-    @DynamicPropertySource
-    static void configureProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.r2dbc.url", () ->
-                String.format("r2dbc:mysql://%s:%d/%s?ssl=false",
-                        mysql.getHost(), mysql.getFirstMappedPort(), mysql.getDatabaseName()));
-        registry.add("spring.r2dbc.username", mysql::getUsername);
-        registry.add("spring.r2dbc.password", mysql::getPassword);
     }
 
     @Test
