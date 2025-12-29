@@ -5,6 +5,7 @@ import com.seonghyeon.jukebox.dataloader.dto.SongDto;
 import com.seonghyeon.jukebox.entity.SimilarSongEntity;
 import com.seonghyeon.jukebox.entity.SongEntity;
 import com.seonghyeon.jukebox.entity.SongMetricsEntity;
+import com.seonghyeon.jukebox.repository.SongStatisticsRepository;
 import io.r2dbc.spi.Statement;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
@@ -26,11 +27,12 @@ public class SongBatchWriter {
 
     private final TransactionalOperator transactionalOperator;
     private final R2dbcEntityTemplate template;
+    private final SongStatisticsRepository songStatisticsRepository;
 
     // [Songs Table]
     private static final String SONGS_TABLE = "songs";
-    private static final String SONGS_COLUMNS = "(id, artist, title, album, release_date, release_year, genre, lyrics, length, emotion, total_likes)";
-    private static final String SONGS_PLACEHOLDERS = makePlaceholders(11);
+    private static final String SONGS_COLUMNS = "(id, artist, title, album, release_date, genre, lyrics, length, emotion, total_likes)";
+    private static final String SONGS_PLACEHOLDERS = makePlaceholders(10);
 
     // [Song Metrics Table]
     private static final String METRICS_TABLE = "song_metrics";
@@ -69,6 +71,10 @@ public class SongBatchWriter {
         transactionalOperator.transactional(flushProcess).block();
     }
 
+    public void buildYearArtistStats() {
+        songStatisticsRepository.buildYearArtistStats().block();
+    }
+
     record IdentifiedSong(Long id, SongDto dto) {
     }
 
@@ -86,7 +92,6 @@ public class SongBatchWriter {
                 bindNext(statement, idx++, s.title(), String.class);
                 bindNext(statement, idx++, s.album(), String.class);
                 bindNext(statement, idx++, s.releaseDate(), LocalDate.class);
-                bindNext(statement, idx++, s.releaseYear(), Integer.class);
                 bindNext(statement, idx++, s.genre(), String.class);
                 bindNext(statement, idx++, s.lyrics(), String.class);
                 bindNext(statement, idx++, s.length(), String.class);
