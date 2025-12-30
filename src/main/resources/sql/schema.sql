@@ -75,7 +75,7 @@ create table song_statistics
     album_count  int           not null
 );
 
-create index idx_stats_year_album_count
-    on song_statistics (release_year desc, album_count desc);
+create index idx_song_statistics_release_year_artist
+    on song_statistics (release_year desc, artist(100));
 
 SET foreign_key_checks = 1;

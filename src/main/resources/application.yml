@@ -16,6 +16,13 @@ jukebox:
     enabled: true
     location: ../data/spotify_dataset.json
 
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+  api-docs:
+    path: /v3/api-docs
+
 logging:
   level:
     org.springframework.data.r2dbc: DEBUG
