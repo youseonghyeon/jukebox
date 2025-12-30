@@ -1,10 +1,13 @@
 package com.seonghyeon.jukebox.controller;
 
+import com.seonghyeon.jukebox.controller.dto.request.LikeRequest;
 import com.seonghyeon.jukebox.controller.dto.response.AlbumStatsResponse;
 import com.seonghyeon.jukebox.service.SongStatisticsQueryService;
+import com.seonghyeon.jukebox.service.like.SongLikeService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springdoc.core.annotations.ParameterObject;
@@ -12,10 +15,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
 @Slf4j
@@ -26,6 +27,7 @@ import reactor.core.publisher.Mono;
 public class SongController {
 
     private final SongStatisticsQueryService songStatisticsQueryService;
+    private final SongLikeService songLikeService;
 
     @Operation(
             summary = "연도/가수별 앨범 수 조회",
@@ -45,6 +47,23 @@ public class SongController {
     ) {
         return songStatisticsQueryService.getAlbumStatsByYearAndArtist(year, artist, pageable)
                 .map(page -> page.map(AlbumStatsResponse::from));
+    }
+
+
+    @Operation(
+            summary = "곡 좋아요/좋아요 취소 처리",
+            description = "특정 곡에 대해 사용자가 좋아요 또는 좋아요 취소를 할 수 있습니다."
+    )
+    @PostMapping("/{songId}/likes")
+    public Mono<ResponseEntity<Void>> handleLike(
+            @PathVariable Long songId,
+            @RequestBody @Valid LikeRequest request
+    ) {
+        Mono<Void> mono = switch (request.action()) {
+            case LIKE -> songLikeService.likeSong(songId, request.userId());
+            case UNLIKE -> songLikeService.unlikeSong(songId, request.userId());
+        };
+        return mono.thenReturn(ResponseEntity.ok().build());
     }
 
 }

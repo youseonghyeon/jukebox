@@ -15,6 +15,11 @@ jukebox:
   dataset:
     enabled: true
     location: ../data/spotify_dataset.json
+  like:
+    strategy: memory
+    write-buffer:
+      cron: "0 0/5 * * * *"
+
 
 springdoc:
   swagger-ui:

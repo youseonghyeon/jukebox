@@ -12,8 +12,8 @@ create table songs
     lyrics       mediumtext                          null,
     length       varchar(10)                         null,
     emotion      varchar(50)                         null,
-    total_likes  bigint    default 0                 null,
-    created_at   timestamp default CURRENT_TIMESTAMP null
+    total_likes  bigint         default 0            not null,
+    created_at   datetime(6)    default current_timestamp(6) not null
 );
 
 drop table if exists song_metrics;
@@ -75,7 +75,20 @@ create table song_statistics
     album_count  int           not null
 );
 
-create index idx_stats_year_album_count
-    on song_statistics (release_year desc, album_count desc);
+create index idx_song_statistics_release_year_artist
+    on song_statistics (release_year desc, artist(100));
+
+
+drop table if exists song_likes;
+
+create table song_likes
+(
+    id         bigint auto_increment
+        primary key,
+    song_id    bigint      not null comment '노래 id',
+    user_id    bigint      not null comment '사용자 id',
+    action     varchar(20) not null comment 'like 또는 unlike',
+    created_at datetime(6) not null default current_timestamp(6) comment '생성 일시'
+);
 
 SET foreign_key_checks = 1;

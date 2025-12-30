@@ -2,6 +2,7 @@ package com.seonghyeon.jukebox.controller;
 
 import com.seonghyeon.jukebox.entity.SongStatisticsEntity;
 import com.seonghyeon.jukebox.service.SongStatisticsQueryService;
+import com.seonghyeon.jukebox.service.like.SongLikeService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,6 +28,9 @@ class SongControllerTest {
 
     @MockitoBean
     private SongStatisticsQueryService songStatisticsQueryService;
+
+    @MockitoBean
+    private SongLikeService songLikeService;
 
     @Test
     @DisplayName("성공적으로 연도 및 가수별 앨범 통계를 페이징하여 조회한다")

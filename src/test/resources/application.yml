@@ -2,3 +2,7 @@ jukebox:
   dataset:
     enabled: false
     location: ""
+  like:
+    strategy: memory
+    write-buffer:
+      cron: "-"
