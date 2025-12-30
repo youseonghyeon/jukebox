@@ -10,7 +10,7 @@ public record LikeRequest(
         Long userId,
 
         @Parameter(description = "액션 (LIKE 또는 UNLIKE)", example = "LIKE")
-        @NotNull(message = "액션(LIKE/UNLIKE)은 필수입니다.") // @NotBlank 대신 @NotNull 사용
+        @NotNull(message = "액션(LIKE/UNLIKE)은 필수입니다.")
         Action action
 ) {
 }

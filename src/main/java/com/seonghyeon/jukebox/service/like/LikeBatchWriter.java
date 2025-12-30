@@ -38,7 +38,7 @@ public class LikeBatchWriter {
                                     log.warn("No song found to update likes. songId: {}", songId);
                                 }
                             });
-                })
+                }, 10)
                 .then();
     }
 

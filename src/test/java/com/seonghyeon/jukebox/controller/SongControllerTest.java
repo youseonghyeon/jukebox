@@ -1,6 +1,13 @@
 package com.seonghyeon.jukebox.controller;
 
+import com.seonghyeon.jukebox.common.exception.like.AlreadyLikedException;
+import com.seonghyeon.jukebox.common.exception.like.NotLikedException;
+import com.seonghyeon.jukebox.common.exception.like.SongNotFoundException;
+import com.seonghyeon.jukebox.controller.dto.request.LikeRequest;
+import com.seonghyeon.jukebox.controller.dto.response.TopLikedResponse;
 import com.seonghyeon.jukebox.entity.SongStatisticsEntity;
+import com.seonghyeon.jukebox.entity.like.Action;
+import com.seonghyeon.jukebox.repository.dto.SongLikeCountDto;
 import com.seonghyeon.jukebox.service.SongStatisticsQueryService;
 import com.seonghyeon.jukebox.service.like.SongLikeService;
 import org.junit.jupiter.api.DisplayName;
@@ -10,11 +17,14 @@ import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.time.Duration;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.*;
@@ -194,5 +204,187 @@ class SongControllerTest {
                         .build())
                 .exchange()
                 .expectStatus().isOk();
+    }
+
+    // --- 좋아요 처리 (POST /{songId}/likes) 테스트 ---
+
+    @Test
+    @DisplayName("성공적으로 곡에 좋아요를 표시한다")
+    void likeSongSuccess() {
+        // given
+        Long songId = 1L;
+        LikeRequest request = new LikeRequest(100L, Action.LIKE);
+
+        given(songLikeService.likeSong(eq(songId), eq(request.userId())))
+                .willReturn(Mono.empty());
+
+        // when & then
+        webTestClient.post()
+                .uri("/api/v1/songs/{songId}/likes", songId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange()
+                .expectStatus().isOk();
+    }
+
+    @Test
+    @DisplayName("이미 좋아요를 누른 곡이면 409 Conflict 에러를 반환한다")
+    void likeSongFailAlreadyLiked() {
+        // given
+        Long songId = 1L;
+        LikeRequest request = new LikeRequest(100L, Action.LIKE);
+        String errorMsg = "The song is already liked.";
+
+        given(songLikeService.likeSong(anyLong(), anyLong()))
+                .willReturn(Mono.error(new AlreadyLikedException(errorMsg)));
+
+        // when & then
+        webTestClient.post()
+                .uri("/api/v1/songs/{songId}/likes", songId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange()
+                .expectStatus().isEqualTo(HttpStatus.CONFLICT)
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("ALREADY_LIKED")
+                .jsonPath("$.message").isEqualTo(errorMsg);
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 곡에 좋아요를 하면 404 에러를 반환한다")
+    void likeSongFailNotFound() {
+        // given
+        Long songId = 999L;
+        LikeRequest request = new LikeRequest(100L, Action.LIKE);
+
+        given(songLikeService.likeSong(anyLong(), anyLong()))
+                .willReturn(Mono.error(new SongNotFoundException("Song not found")));
+
+        // when & then
+        webTestClient.post()
+                .uri("/api/v1/songs/{songId}/likes", songId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange()
+                .expectStatus().isNotFound();
+    }
+
+    @Test
+    @DisplayName("성공적으로 곡의 좋아요를 취소한다")
+    void unlikeSongSuccess() {
+        // given
+        Long songId = 1L;
+        LikeRequest request = new LikeRequest(100L, Action.UNLIKE);
+
+        given(songLikeService.unlikeSong(eq(songId), eq(request.userId())))
+                .willReturn(Mono.empty());
+
+        // when & then
+        webTestClient.post()
+                .uri("/api/v1/songs/{songId}/likes", songId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange()
+                .expectStatus().isOk();
+    }
+
+    // --- 인기 곡 조회 (GET /top-liked) 테스트 ---
+
+    @Test
+    @DisplayName("최근 1시간 내 최다 좋아요 곡 10개를 조회한다")
+    void getTopLikedSongsSuccess() {
+        // given
+        SongLikeCountDto dto1 = new SongLikeCountDto(1L, 50L);
+        SongLikeCountDto dto2 = new SongLikeCountDto(2L, 30L);
+
+        given(songLikeService.getTopLikedSongs(any(Duration.class), anyInt()))
+                .willReturn(Flux.just(dto1, dto2));
+
+        // when & then
+        webTestClient.get()
+                .uri("/api/v1/songs/top-liked")
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().contentType(MediaType.APPLICATION_JSON)
+                .expectBodyList(TopLikedResponse.class)
+                .hasSize(2)
+                .consumeWith(result -> {
+                    List<TopLikedResponse> responses = result.getResponseBody();
+                    assert responses != null;
+                    org.assertj.core.api.Assertions.assertThat(responses.get(0).songId()).isEqualTo(1L);
+                    org.assertj.core.api.Assertions.assertThat(responses.get(0).likeCount()).isEqualTo(50L);
+                });
+    }
+
+    @Test
+    @DisplayName("좋아요를 하지 않은 곡에 대해 취소를 요청하면 409 Conflict 에러를 반환한다")
+    void unlikeSongFailNotLiked() {
+        // given
+        Long songId = 1L;
+        LikeRequest request = new LikeRequest(100L, Action.UNLIKE);
+        String errorMsg = "No active like found for song to remove.";
+
+        given(songLikeService.unlikeSong(anyLong(), anyLong()))
+                .willReturn(Mono.error(new NotLikedException(errorMsg)));
+
+        // when & then
+        webTestClient.post()
+                .uri("/api/v1/songs/{songId}/likes", songId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange()
+                .expectStatus().isEqualTo(HttpStatus.CONFLICT)
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("NOT_LIKED") // GlobalHandler에 설정한 코드
+                .jsonPath("$.message").isEqualTo(errorMsg);
+    }
+
+    @Test
+    @DisplayName("필수 파라미터(userId)가 누락된 좋아요 요청은 400 에러를 반환한다")
+    void likeRequestValidationFail() {
+        // given: userId가 null인 객체 생성
+        LikeRequest invalidRequest = new LikeRequest(null, Action.LIKE);
+
+        // when & then
+        webTestClient.post()
+                .uri("/api/v1/songs/1/likes")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(invalidRequest) // String이 아닌 객체를 직접 전달
+                .exchange()
+                .expectStatus().isBadRequest(); // 이제 정상적으로 400 에러 포착
+    }
+
+    @Test
+    @DisplayName("최근 1시간 내 좋아요 데이터가 없으면 빈 목록을 반환한다")
+    void getTopLikedSongsEmpty() {
+        // given
+        given(songLikeService.getTopLikedSongs(any(Duration.class), anyInt()))
+                .willReturn(Flux.empty());
+
+        // when & then
+        webTestClient.get()
+                .uri("/api/v1/songs/top-liked")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$").isArray()
+                .jsonPath("$.length()").isEqualTo(0);
+    }
+
+    @Test
+    @DisplayName("지원하지 않는 액션 값이 들어오면 400 에러를 반환한다")
+    void likeRequestInvalidAction() {
+        // given: Action enum에 존재하지 않는 문자열을 포함한 JSON
+        String invalidJson = "{\"userId\": 100, \"action\": \"HATE\"}";
+
+        // when & then
+        webTestClient.post()
+                .uri("/api/v1/songs/1/likes")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(invalidJson) // 객체 대신 문자열로 잘못된 값을 직접 전달
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("BAD_REQUEST");
     }
 }

@@ -35,16 +35,15 @@ public class SongLikeService {
                 .filter(exists -> exists)
                 // 노래 존재 유무 검증
                 .switchIfEmpty(Mono.error(new SongNotFoundException("Song not found with ID: " + songId)))
-                .then(songLikeRepository.countUserLikeStatus(songId, userId))
-                // 중복 좋아요 검증
+                .then(Mono.defer(() -> songLikeRepository.countUserLikeStatus(songId, userId)))
                 .filter(this::canLike)
                 .switchIfEmpty(Mono.defer(() -> {
                     log.debug("[LikeService] Conflict detected: User {} already liked song {}", userId, songId);
                     return Mono.error(new AlreadyLikedException(String.format("The song (ID: %d) is already liked.", songId)));
                 }))
                 // 좋아요 기록 저장 및 카운트 증가
-                .then(songLikeRepository.save(SongLikeEntity.of(songId, userId, Action.LIKE)))
-                .then(likeWriteStrategy.addLike(songId));
+                .then(Mono.defer(() -> songLikeRepository.save(SongLikeEntity.of(songId, userId, Action.LIKE))))
+                .then(Mono.defer(() -> likeWriteStrategy.addLike(songId)));
     }
 
     public Mono<Void> unlikeSong(Long songId, Long userId) {
@@ -56,16 +55,16 @@ public class SongLikeService {
                     return Mono.error(new NotLikedException(String.format("The song (ID: %d) is not currently liked.", songId)));
                 }))
                 // 좋아요 취소 기록 저장 및 카운트 감소
-                .then(songLikeRepository.save(SongLikeEntity.of(songId, userId, Action.UNLIKE)))
-                .then(likeWriteStrategy.removeLike(songId));
+                .then(Mono.defer(() -> songLikeRepository.save(SongLikeEntity.of(songId, userId, Action.UNLIKE))))
+                .then(Mono.defer(() -> likeWriteStrategy.removeLike(songId)));
     }
 
     private boolean canLike(Integer likeCount) {
-        return likeCount < 1; // 좋아요를 하지 않은 상태
+        return likeCount != null && likeCount < 1; // 좋아요를 하지 않은 상태
     }
 
     private boolean canUnlike(Integer likeCount) {
-        return likeCount > 0; // 좋아요를 한 상태
+        return likeCount != null && likeCount > 0; // 좋아요를 한 상태
     }
 
     public Flux<SongLikeCountDto> getTopLikedSongs(Duration window, int limit) {

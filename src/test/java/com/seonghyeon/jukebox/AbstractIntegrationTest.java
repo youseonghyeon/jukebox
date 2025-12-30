@@ -22,7 +22,8 @@ public abstract class AbstractIntegrationTest {
                 .withCommand(
                         "--character-set-server=utf8mb4",
                         "--collation-server=utf8mb4_unicode_ci",
-                        "--default-authentication-plugin=mysql_native_password"
+                        "--default-authentication-plugin=mysql_native_password",
+                        "--default-time-zone=+09:00"
                 );
 
         mysql.start(); // 수동 시작
