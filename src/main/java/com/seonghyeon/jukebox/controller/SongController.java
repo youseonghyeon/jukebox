@@ -2,6 +2,7 @@ package com.seonghyeon.jukebox.controller;
 
 import com.seonghyeon.jukebox.controller.dto.request.LikeRequest;
 import com.seonghyeon.jukebox.controller.dto.response.AlbumStatsResponse;
+import com.seonghyeon.jukebox.controller.dto.response.TopLikedResponse;
 import com.seonghyeon.jukebox.service.SongStatisticsQueryService;
 import com.seonghyeon.jukebox.service.like.SongLikeService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -17,7 +18,10 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+
+import java.time.Duration;
 
 @Slf4j
 @RestController
@@ -64,6 +68,16 @@ public class SongController {
             case UNLIKE -> songLikeService.unlikeSong(songId, request.userId());
         };
         return mono.thenReturn(ResponseEntity.ok().build());
+    }
+
+    @Operation(
+            summary = "최근 1시간 내 최다 좋아요 곡 조회",
+            description = "최근 1시간 동안 가장 많은 좋아요를 받은 상위 10개 곡을 조회합니다."
+    )
+    @GetMapping("/top-liked")
+    public Flux<TopLikedResponse> getTopLikedSongs() {
+        return songLikeService.getTopLikedSongs(Duration.ofHours(1), 10)
+                .map(TopLikedResponse::from);
     }
 
 }

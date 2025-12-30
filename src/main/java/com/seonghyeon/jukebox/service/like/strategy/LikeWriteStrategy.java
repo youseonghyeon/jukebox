@@ -1,23 +1,36 @@
 package com.seonghyeon.jukebox.service.like.strategy;
 
 import jakarta.annotation.PreDestroy;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
+@Slf4j
 public abstract class LikeWriteStrategy {
 
-    public abstract Mono<Void> addLike(Long songId, Mono<Void> saveHistoryAction);
+    public abstract Mono<Void> addLike(Long songId);
 
-    public abstract Mono<Void> removeLike(Long songId, Mono<Void> deleteHistoryAction);
+    public abstract Mono<Void> removeLike(Long songId);
 
     @Scheduled(cron = "${jukebox.like.write-buffer.cron:0 0/5 * * * *}")
     public void run() {
-        flushToDatabase().block();
+        flushToDatabase()
+                .subscribeOn(Schedulers.boundedElastic())
+                .subscribe(
+                        null,
+                        error -> log.error("Error occurred while flushing likes to database", error)
+                );
     }
 
     @PreDestroy
     public void onDestroy() {
-        flushToDatabase().block();
+        flushToDatabase()
+                .subscribeOn(Schedulers.boundedElastic())
+                .subscribe(
+                        null,
+                        error -> log.error("Error occurred while flushing likes to database", error)
+                );
     }
 
     protected abstract Mono<Void> flushToDatabase();

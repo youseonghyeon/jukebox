@@ -8,5 +8,8 @@ services:
       MYSQL_DATABASE: jukebox_db
       MYSQL_USER: user
       MYSQL_PASSWORD: password
+      TZ: Asia/Seoul
     ports:
       - "13306:3306"
+    command:
+      - --default-time-zone=Asia/Seoul

@@ -16,45 +16,53 @@ import java.util.function.Function;
 public class MemoryLikeWriteStrategy extends LikeWriteStrategy {
 
     private final AtomicReference<ConcurrentHashMap<Long, LongAdder>> currentBuffer = new AtomicReference<>(new ConcurrentHashMap<>());
-    private final Function<Map<Long, LongAdder>, Mono<Void>> batchUpdater;
+
+    private final Function<Map<Long, LongAdder>, Mono<Void>> likeBatchWriter;
     private final TransactionalOperator transactionalOperator;
 
     @Override
-    public Mono<Void> addLike(Long songId, Mono<Void> saveHistoryAction) {
+    public Mono<Void> addLike(Long songId) {
         log.debug("[MemoryStrategy] addLike: songId={}", songId);
-        return saveHistoryAction.doOnSuccess(v -> {
-            currentBuffer.get()
-                    .computeIfAbsent(songId, k -> new LongAdder())
-                    .increment();
-        });
+        return Mono.fromRunnable(() -> currentBuffer.get()
+                .computeIfAbsent(songId, k -> new LongAdder())
+                .increment()
+        );
     }
 
     @Override
-    public Mono<Void> removeLike(Long songId, Mono<Void> deleteHistoryAction) {
+    public Mono<Void> removeLike(Long songId) {
         log.debug("[MemoryStrategy] removeLike: songId={}", songId);
-        return deleteHistoryAction.doOnSuccess(v -> {
-            currentBuffer.get()
-                    .computeIfAbsent(songId, k -> new LongAdder())
-                    .decrement();
-        });
+        return Mono.fromRunnable(() -> currentBuffer.get()
+                .computeIfAbsent(songId, k -> new LongAdder())
+                .decrement()
+        );
     }
 
     @Override
     protected Mono<Void> flushToDatabase() {
-        log.debug("[MemoryStrategy] flushToDatabase started");
-        ConcurrentHashMap<Long, LongAdder> snapshot = currentBuffer.getAndSet(new ConcurrentHashMap<>());
-        if (snapshot.isEmpty()) {
-            return Mono.empty();
-        }
+        return Mono.defer(() -> {
+            long startTime = System.currentTimeMillis();
+            ConcurrentHashMap<Long, LongAdder> snapshot = currentBuffer.getAndSet(new ConcurrentHashMap<>());
 
-        log.info("메모리 플러시 시작: {}건", snapshot.size());
-        return batchUpdater.apply(snapshot)
-                .as(transactionalOperator::transactional) // 트랜잭션 적용
-                .doOnSuccess(v -> log.info("데이터베이스 플러시 성공"))
-                .doOnError(e -> {
-                    log.error("Failed to flush likes to database", e);
-                    // backupToOutbox(snapshot);
-                });
+            if (snapshot.isEmpty()) {
+                log.debug("[MemoryStrategy] Flush skipped: No data in buffer.");
+                return Mono.empty();
+            }
+
+            int targetCount = snapshot.size();
+            log.info("[MemoryStrategy] Flush starting: Target songs count = {}", targetCount);
+
+            return likeBatchWriter.apply(snapshot)
+                    .as(transactionalOperator::transactional)
+                    .doOnSuccess(v -> {
+                        long duration = System.currentTimeMillis() - startTime;
+                        log.info("[MemoryStrategy] Flush completed: {} songs updated in {}ms", targetCount, duration);
+                    })
+                    .doOnError(e -> {
+                        log.error("[MemoryStrategy] Flush failed! Data lost potential for {} songs. Error: {}", targetCount, e.getMessage(), e);
+                        // TODO 재시도 또는 백업 로직 추가
+                    });
+        });
     }
 
 }
