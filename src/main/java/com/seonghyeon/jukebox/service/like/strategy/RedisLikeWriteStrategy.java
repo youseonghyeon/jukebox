@@ -72,7 +72,9 @@ public class RedisLikeWriteStrategy extends LikeWriteStrategy {
             return reactiveRedisTemplate.opsForValue()
                     .setIfAbsent(LOCK_KEY, SERVER_ID, LOCK_EXPIRY)
                     .filter(Boolean.TRUE::equals)
+                    // 락을 획득하지 못한 경우
                     .switchIfEmpty(Mono.fromRunnable(() -> log.debug("[RedisStrategy] Flush skip: lock held by another instance")))
+                    // 락 획득에 성공한 경우
                     .flatMap(isLocked -> executeFlush()
                             .then(Mono.defer(() -> reactiveRedisTemplate.delete(LOCK_KEY)))
                             .doOnSuccess(v -> log.info("[RedisStrategy] Flush completed in {} ms", System.currentTimeMillis() - startTime))
@@ -84,7 +86,7 @@ public class RedisLikeWriteStrategy extends LikeWriteStrategy {
     private Mono<Void> executeFlush() {
         return reactiveRedisTemplate.hasKey(SNAPSHOT_KEY)
                 .flatMap(hasSnapshot -> {
-                    if (hasSnapshot) { // Lock 획득했으나, 과거 미처리된 스냅샷이 존재하는 경우
+                    if (hasSnapshot) { // 과거 미처리된 스냅샷이 존재하는 경우
                         log.warn("[RedisStrategy] Resume: Processing existing snapshot");
                         return processSnapshot();
                     }

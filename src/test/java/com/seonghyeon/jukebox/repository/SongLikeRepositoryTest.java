@@ -57,36 +57,40 @@ class SongLikeRepositoryTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("시간 범위 내에서 최다 좋아요를 받은 곡 목록을 내림차순으로 조회한다")
-    void findTopLikedSongsTest() {
+    @DisplayName("시간 범위 내에서 순증가(LIKE > UNLIKE)가 발생한 곡만 내림차순으로 조회하며, 0개인 곡은 제외한다")
+    void findTopLikedSongsExcludeZeroTest() {
         // given
         LocalDateTime since = LocalDateTime.now().minusHours(1);
 
-        // 데이터 구성: 1번 곡(좋아요 2), 2번 곡(좋아요 1), 3번 곡(좋아요 0 = LIKE 1, UNLIKE 1)
+        // 데이터 구성:
+        // 1번 곡: LIKE 2 -> +2
+        // 2번 곡: LIKE 1 -> +1
+        // 3번 곡: LIKE 1, UNLIKE 1 -> 0 (결과에서 제외되어야 함)
+        // 4번 곡: UNLIKE 1 -> -1 (결과에서 제외되어야 함)
         List<SongLikeEntity> logs = List.of(
                 SongLikeEntity.of(1L, 101L, Action.LIKE),
                 SongLikeEntity.of(1L, 102L, Action.LIKE),
                 SongLikeEntity.of(2L, 103L, Action.LIKE),
                 SongLikeEntity.of(3L, 104L, Action.LIKE),
-                SongLikeEntity.of(3L, 105L, Action.UNLIKE)
+                SongLikeEntity.of(3L, 105L, Action.UNLIKE),
+                SongLikeEntity.of(4L, 106L, Action.UNLIKE)
         );
 
         // when & then
         songLikeRepository.saveAll(logs)
                 .thenMany(songLikeRepository.findTopLikedSongs(since, 10))
                 .as(StepVerifier::create)
+                // 1순위: 1번 곡 (2개)
                 .assertNext(dto -> {
                     assertThat(dto.songId()).isEqualTo(1L);
                     assertThat(dto.likeCount()).isEqualTo(2);
                 })
+                // 2순위: 2번 곡 (1개)
                 .assertNext(dto -> {
                     assertThat(dto.songId()).isEqualTo(2L);
                     assertThat(dto.likeCount()).isEqualTo(1);
                 })
-                .assertNext(dto -> {
-                    assertThat(dto.songId()).isEqualTo(3L);
-                    assertThat(dto.likeCount()).isEqualTo(0);
-                })
+                // 3번 곡(0개)과 4번 곡(-1개)은 HAVING like_count > 0 조건에 의해 반환되지 않아야 함
                 .verifyComplete();
     }
 }

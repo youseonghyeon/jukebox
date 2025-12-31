@@ -32,6 +32,7 @@ public class SongLikeService {
                 // 노래 존재 유무 검증
                 .switchIfEmpty(Mono.error(new SongNotFoundException("Song not found with ID: " + songId)))
                 .then(Mono.defer(() -> songLikeRepository.countUserLikeStatus(songId, userId)))
+                .defaultIfEmpty(0)
                 .filter(this::canLike)
                 .switchIfEmpty(Mono.defer(() -> {
                     log.debug("[LikeService] Conflict detected: User {} already liked song {}", userId, songId);
@@ -44,6 +45,7 @@ public class SongLikeService {
 
     public Mono<Void> unlikeSong(Long songId, Long userId) {
         return songLikeRepository.countUserLikeStatus(songId, userId)
+                .defaultIfEmpty(0)
                 // 좋아요 취소 가능 여부 검증
                 .filter(this::canUnlike)
                 .switchIfEmpty(Mono.defer(() -> {

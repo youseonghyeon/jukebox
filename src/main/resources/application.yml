@@ -25,11 +25,11 @@ jukebox:
   dataset:
     enabled: true
     location: ../data/spotify_dataset.json
+    batch-size: 5000
   like:
-    strategy: redis # options: [memory, redis] (default: memory)
+    strategy: redis # 좋아요 쓰기 버퍼링 전략 (options: redis=분산환경, memory=단일 인스턴스)
     write-buffer:
-      cron: "0 0/5 * * * *" # 스케줄러 실행 주기는 최소 1분 이상이어야 함
-
+      cron: "0 0/5 * * * *" # 스케줄러 실행 주기는 최소 1분 이상으로 설정 필요
 
 springdoc:
   swagger-ui:
@@ -41,4 +41,4 @@ springdoc:
 logging:
   level:
     com.seonghyeon.jukebox: DEBUG
-    org.springframework.data.r2dbc: DEBUG
+    org.springframework.data.r2dbc: INFO

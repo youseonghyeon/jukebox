@@ -23,6 +23,7 @@ public interface SongLikeRepository extends R2dbcRepository<SongLikeEntity, Long
         FROM song_likes
         WHERE created_at >= :since
         GROUP BY song_id
+        HAVING SUM(IF(action = 'LIKE', 1, -1)) > 0
         ORDER BY like_count DESC
         LIMIT :limit
     """)

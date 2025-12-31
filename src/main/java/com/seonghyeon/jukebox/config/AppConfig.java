@@ -22,14 +22,14 @@ public class AppConfig {
     @Bean
     @ConditionalOnProperty(name = "jukebox.like.strategy", havingValue = "memory", matchIfMissing = true)
     public LikeWriteStrategy memoryLikeStrategy(LikeBatchWriter likeBatchWriter, TransactionalOperator to) {
-        log.debug("Using MemoryLikeWriteStrategy");
+        log.debug("[Bean Initialization] Using MemoryLikeWriteStrategy");
         return new MemoryLikeWriteStrategy(likeBatchWriter::updateLike, to);
     }
 
     @Bean
     @ConditionalOnProperty(name = "jukebox.like.strategy", havingValue = "redis")
     public LikeWriteStrategy redisLikeStrategy(ReactiveRedisTemplate<String, String> reactiveRedisTemplate, LikeBatchWriter likeBatchWriter, TransactionalOperator to) {
-        log.debug("Using RedisLikeWriteStrategy");
+        log.debug("[Bean Initialization] Using RedisLikeWriteStrategy");
         return new RedisLikeWriteStrategy(reactiveRedisTemplate, likeBatchWriter::updateLike, to);
     }
 }

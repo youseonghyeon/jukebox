@@ -91,4 +91,10 @@ create table song_likes
     created_at datetime(6) not null default current_timestamp(6) comment '생성 일시'
 );
 
+create index idx_song_likes_song_id_user_id
+    on song_likes (song_id, user_id);
+
+create index idx_song_likes_created_at
+    on song_likes (created_at);
+
 SET foreign_key_checks = 1;
