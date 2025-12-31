@@ -2,3 +2,11 @@ jukebox:
   dataset:
     enabled: false
     location: ""
+  like:
+    strategy: memory
+    write-buffer:
+      cron: "-"
+
+logging:
+  level:
+    com.seonghyeon.jukebox: DEBUG

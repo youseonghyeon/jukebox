@@ -3,15 +3,16 @@ package com.seonghyeon.jukebox;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.MySQLContainer;
 
 @SpringBootTest
 public abstract class AbstractIntegrationTest {
 
     static final MySQLContainer<?> mysql;
+    static final GenericContainer<?> redis;
 
     static {
-        // 클래스 로드 시점에 컨테이너를 딱 한 번 생성 및 시작
         mysql = new MySQLContainer<>("mysql:8.0")
                 .withDatabaseName("testdb")
                 .withUsername("test")
@@ -22,19 +23,27 @@ public abstract class AbstractIntegrationTest {
                 .withCommand(
                         "--character-set-server=utf8mb4",
                         "--collation-server=utf8mb4_unicode_ci",
-                        "--default-authentication-plugin=mysql_native_password"
+                        "--default-authentication-plugin=mysql_native_password",
+                        "--default-time-zone=+09:00"
                 );
 
-        mysql.start(); // 수동 시작
+        redis = new GenericContainer<>("redis:7.0-alpine")
+                .withExposedPorts(6379);
+
+        mysql.start();
+        redis.start();
     }
 
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
-        // 런타임에 결정된 포트와 호스트 정보를 R2DBC 설정에 주입
         registry.add("spring.r2dbc.url", () ->
                 String.format("r2dbc:mysql://%s:%d/%s?ssl=false",
                         mysql.getHost(), mysql.getFirstMappedPort(), mysql.getDatabaseName()));
         registry.add("spring.r2dbc.username", mysql::getUsername);
         registry.add("spring.r2dbc.password", mysql::getPassword);
+
+        registry.add("spring.data.redis.host", redis::getHost);
+        registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
+        registry.add("spring.data.redis.repositories.enabled", () -> "false");
     }
 }

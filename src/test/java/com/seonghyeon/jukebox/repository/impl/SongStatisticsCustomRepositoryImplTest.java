@@ -17,6 +17,8 @@ import reactor.test.StepVerifier;
 
 import java.util.List;
 
+import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+
 class SongStatisticsCustomRepositoryImplTest extends AbstractIntegrationTest {
 
     @Autowired
@@ -80,6 +82,47 @@ class SongStatisticsCustomRepositoryImplTest extends AbstractIntegrationTest {
         songStatisticsRepository.countByYearAndArtist(2024, "NewJeans")
                 .as(StepVerifier::create)
                 .expectNext(1L)
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("연도와 가수가 모두 주어지면 두 조건을 모두 만족하는 데이터만 조회되어야 한다")
+    void filterByYearAndArtist() {
+        songStatisticsRepository.findAllByYearAndArtist(2024, "NewJeans", PageRequest.of(0, 10))
+                .as(StepVerifier::create)
+                .assertNext(entity -> {
+                    assertThat(entity.releaseYear()).isEqualTo(2024);
+                    assertThat(entity.artist()).isEqualTo("NewJeans");
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("페이징의 size 설정에 따라 반환되는 데이터 개수가 제한되어야 한다")
+    void pagingSizeTest() {
+        // 4개의 데이터 중 size를 2로 설정
+        songStatisticsRepository.findAllByYearAndArtist(null, null, PageRequest.of(0, 2))
+                .as(StepVerifier::create)
+                .expectNextCount(2)
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("페이징의 page 설정에 따라 데이터가 건너뛰어지고 다음 페이지가 조회되어야 한다")
+    void pagingOffsetTest() {
+        // 2024년 데이터가 2개(NewJeans, IVE)일 때, size 1로 첫 페이지를 조회하면 하나만 나옴
+        songStatisticsRepository.findAllByYearAndArtist(2024, null, PageRequest.of(1, 1))
+                .as(StepVerifier::create)
+                .expectNextCount(1)
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("가수 이름 검색 시 대소문자 구분 없이 조회되어야 한다 (Criteria 특성 )")
+    void filterByArtistCaseSensitivity() {
+        songStatisticsRepository.findAllByYearAndArtist(null, "newjeans", PageRequest.of(0, 10))
+                .as(StepVerifier::create)
+                .expectNextCount(2) // 현재 SQL이 '=' 이라면 0개 예상
                 .verifyComplete();
     }
 }

@@ -5,16 +5,31 @@ spring:
     password: password
     pool:
       max-size: 70
-
   sql:
     init:
       mode: always
       schema-locations: classpath:sql/schema.sql
 
+  data:
+    redis:
+      host: localhost
+      port: 16379
+      timeout: 3000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+
 jukebox:
   dataset:
     enabled: true
     location: ../data/spotify_dataset.json
+    batch-size: 5000
+  like:
+    strategy: redis # 좋아요 쓰기 버퍼링 전략 (options: redis=분산환경, memory=단일 인스턴스)
+    write-buffer:
+      cron: "0 0/5 * * * *" # 스케줄러 실행 주기는 최소 1분 이상으로 설정 필요
 
 springdoc:
   swagger-ui:
@@ -25,4 +40,5 @@ springdoc:
 
 logging:
   level:
-    org.springframework.data.r2dbc: DEBUG
+    com.seonghyeon.jukebox: DEBUG
+    org.springframework.data.r2dbc: INFO

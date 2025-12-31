@@ -21,6 +21,9 @@ public class SongDataInitializer implements ApplicationRunner {
     @Value("${jukebox.dataset.location}")
     private String dataSetLocation;
 
+    @Value("${jukebox.dataset.batch-size:1000}")
+    private int dataSetBatchSize;
+
     private final JsonBatchReader jsonBatchReader;
     private final SongBatchWriter songBatchWriter;
 
@@ -29,7 +32,7 @@ public class SongDataInitializer implements ApplicationRunner {
         if (dataSetEnabled) {
             Path path = Path.of(dataSetLocation);
             Thread.ofVirtual().name("data-init-worker").start(() -> {
-                jsonBatchReader.process(path, songBatchWriter::flushAll, 1000, SongDto.class, 0);
+                jsonBatchReader.process(path, songBatchWriter::flushAll, dataSetBatchSize, SongDto.class, 0);
                 songBatchWriter.buildYearArtistStats(); // 통계 정보 구축
             });
         } else {
