@@ -1,20 +1,27 @@
 package com.seonghyeon.jukebox.service.like.strategy;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Comparator;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Function;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -26,7 +33,7 @@ import static org.mockito.Mockito.*;
 class MemoryLikeWriteStrategyTest {
 
     @Mock
-    private Function<Map<Long, LongAdder>, Mono<Void>> likeBatchWriter;
+    private Function<Map<Long, Long>, Mono<Void>> likeBatchWriter;
 
     @Mock
     private TransactionalOperator transactionalOperator;
@@ -37,9 +44,26 @@ class MemoryLikeWriteStrategyTest {
     void setUp() {
         strategy = new MemoryLikeWriteStrategy(likeBatchWriter, transactionalOperator);
 
+        strategy.setBackupPath(tempDir.toString());
+
         // lenient()를 추가하여 모든 테스트에서 사용되지 않더라도 예외를 발생시키지 않음
         lenient().when(transactionalOperator.transactional(any(Mono.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
+    }
+
+    @TempDir
+    Path tempDir;
+
+    @AfterEach
+    void tearDown() throws IOException {
+        Path outboxPath = Paths.get("outbox");
+        if (Files.exists(outboxPath)) {
+            try (var files = Files.walk(outboxPath)) {
+                files.sorted(Comparator.reverseOrder())
+                        .map(Path::toFile)
+                        .forEach(File::delete);
+            }
+        }
     }
 
     @Test
@@ -60,7 +84,7 @@ class MemoryLikeWriteStrategyTest {
 
         // batchWriter에 전달된 Map의 값 확인 (1 + 1 - 1 = 1)
         verify(likeBatchWriter).apply(argThat(map -> {
-            assertThat(map.get(songId).sum()).isEqualTo(1L);
+            assertThat(map.get(songId)).isEqualTo(1L);
             return true;
         }));
     }
@@ -134,10 +158,45 @@ class MemoryLikeWriteStrategyTest {
         strategy.flushToDatabase().block();
 
         verify(likeBatchWriter).apply(argThat(map -> {
-            assertThat(map.get(songId).sum()).isEqualTo((long) threadCount);
+            assertThat(map.get(songId)).isEqualTo((long) threadCount);
             return true;
         }));
 
         executorService.shutdown();
+    }
+
+    @Test
+    @DisplayName("DB Flush 실패 시 onDestroy를 통해 데이터를 파일로 백업한다")
+    void backupToFileOnFlushError() {
+        // given
+        strategy.addLike(99L).block();
+        given(likeBatchWriter.apply(any())).willReturn(Mono.error(new RuntimeException("DB Error")));
+
+        // when
+        try {
+            strategy.onDestroy(); // onDestroy 내부에서 flushToDatabase를 호출하고 실패 시 백업함
+        } catch (Exception ignored) {
+        }
+
+        // then
+        File[] files = tempDir.toFile().listFiles();
+        assertThat(files).isNotNull().isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("종료 시 DB Flush 실패하면 임시 디렉토리에 백업한다")
+    void backupOnDestroyFailure() {
+        // given
+        strategy.addLike(50L).block();
+        // onDestroy 내의 flushToDatabase가 실패하도록 설정
+        given(likeBatchWriter.apply(any())).willReturn(Mono.error(new RuntimeException("Shutdown DB Error")));
+
+        // when
+        strategy.onDestroy();
+
+        // then: 임시 디렉토리에 백업 파일이 있어야 함
+        File[] files = tempDir.toFile().listFiles();
+        assertThat(files).isNotNull().isNotEmpty();
+        assertThat(files[0].getName()).startsWith("backup-");
     }
 }

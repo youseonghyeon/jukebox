@@ -8,7 +8,6 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.Map;
-import java.util.concurrent.atomic.LongAdder;
 
 @Slf4j
 @Component
@@ -17,7 +16,7 @@ public class LikeBatchWriter {
 
     private final DatabaseClient databaseClient;
 
-    public Mono<Void> updateLike(Map<Long, LongAdder> snapshot) {
+    public Mono<Void> updateLike(Map<Long, Long> snapshot) {
         if (snapshot.isEmpty()) {
             return Mono.empty();
         }
@@ -25,7 +24,7 @@ public class LikeBatchWriter {
         return Flux.fromIterable(snapshot.entrySet())
                 .flatMap(entry -> {
                     Long songId = entry.getKey();
-                    long diff = entry.getValue().sum();
+                    long diff = entry.getValue();
                     if (diff == 0) return Mono.empty();
 
                     return databaseClient.sql("UPDATE songs SET total_likes = total_likes + :diff WHERE id = :id")

@@ -1,6 +1,5 @@
 package com.seonghyeon.jukebox.service.like.strategy;
 
-import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import reactor.core.publisher.Mono;
@@ -19,19 +18,11 @@ public abstract class LikeWriteStrategy {
                 .subscribeOn(Schedulers.boundedElastic())
                 .subscribe(
                         null,
-                        error -> log.error("Error occurred while flushing likes to database", error)
+                        e -> log.error("Error occurred while flushing likes to database", e)
                 );
     }
 
-    @PreDestroy
-    public void onDestroy() {
-        flushToDatabase()
-                .subscribeOn(Schedulers.boundedElastic())
-                .subscribe(
-                        null,
-                        error -> log.error("Error occurred while flushing likes to database", error)
-                );
-    }
-
+    // CircuitBreaker 대상
     protected abstract Mono<Void> flushToDatabase();
+
 }

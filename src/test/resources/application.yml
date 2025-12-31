@@ -6,3 +6,7 @@ jukebox:
     strategy: memory
     write-buffer:
       cron: "-"
+
+logging:
+  level:
+    com.seonghyeon.jukebox: DEBUG

@@ -5,20 +5,30 @@ spring:
     password: password
     pool:
       max-size: 70
-
   sql:
     init:
-      mode: never
+      mode: always
       schema-locations: classpath:sql/schema.sql
+
+  data:
+    redis:
+      host: localhost
+      port: 16379
+      timeout: 3000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
 
 jukebox:
   dataset:
-    enabled: false
+    enabled: true
     location: ../data/spotify_dataset.json
   like:
-    strategy: memory
+    strategy: redis # options: [memory, redis] (default: memory)
     write-buffer:
-      cron: "0 0/5 * * * *"
+      cron: "0 0/5 * * * *" # 스케줄러 실행 주기는 최소 1분 이상이어야 함
 
 
 springdoc:
