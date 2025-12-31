@@ -22,6 +22,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
+import java.time.LocalDateTime;
 
 @Slf4j
 @RestController
@@ -75,7 +76,8 @@ public class SongController {
     )
     @GetMapping("/top-liked")
     public Flux<TopLikedResponse> getTopLikedSongs() {
-        return songLikeService.getTopLikedSongs(Duration.ofHours(1), 10)
+        LocalDateTime since = LocalDateTime.now().minus(Duration.ofHours(1));
+        return songLikeService.getTopLikedSongs(since, 10)
                 .map(TopLikedResponse::from);
     }
 

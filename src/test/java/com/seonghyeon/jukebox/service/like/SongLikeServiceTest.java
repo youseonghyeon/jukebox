@@ -42,7 +42,7 @@ class SongLikeServiceTest {
 
     @BeforeEach
     void setUp() {
-        songLikeService = new SongLikeService(likeWriteStrategy, songLikeRepository, songRepository, fixedClock);
+        songLikeService = new SongLikeService(likeWriteStrategy, songLikeRepository, songRepository);
     }
 
     @Test
@@ -58,7 +58,7 @@ class SongLikeServiceTest {
                 .willReturn(Flux.empty());
 
         // when
-        songLikeService.getTopLikedSongs(window, limit).subscribe();
+        songLikeService.getTopLikedSongs(expectedSince, limit).subscribe();
 
         // then
         verify(songLikeRepository).findTopLikedSongs(expectedSince, limit);

@@ -20,11 +20,6 @@ import java.time.Clock;
 public class AppConfig {
 
     @Bean
-    public Clock clock() {
-        return Clock.systemDefaultZone();
-    }
-
-    @Bean
     @ConditionalOnProperty(name = "jukebox.like.strategy", havingValue = "memory", matchIfMissing = true)
     public LikeWriteStrategy memoryLikeStrategy(LikeBatchWriter likeBatchWriter, TransactionalOperator to) {
         log.debug("Using MemoryLikeWriteStrategy");

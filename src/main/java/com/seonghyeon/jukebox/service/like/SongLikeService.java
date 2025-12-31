@@ -15,8 +15,6 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.time.Clock;
-import java.time.Duration;
 import java.time.LocalDateTime;
 
 @Slf4j
@@ -27,8 +25,6 @@ public class SongLikeService {
     private final LikeWriteStrategy likeWriteStrategy;
     private final SongLikeRepository songLikeRepository;
     private final SongRepository songRepository;
-
-    private final Clock clock;
 
     public Mono<Void> likeSong(Long songId, Long userId) {
         return songRepository.existsById(songId)
@@ -67,8 +63,7 @@ public class SongLikeService {
         return likeCount != null && likeCount > 0; // 좋아요를 한 상태
     }
 
-    public Flux<SongLikeCountDto> getTopLikedSongs(Duration window, int limit) {
-        LocalDateTime since = LocalDateTime.now(clock).minus(window);
+    public Flux<SongLikeCountDto> getTopLikedSongs(LocalDateTime since, int limit) {
         log.debug("Fetching top {} liked songs since {}", limit, since);
         return songLikeRepository.findTopLikedSongs(since, limit);
     }

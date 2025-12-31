@@ -24,13 +24,13 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.BDDMockito.given;
 
-@WebFluxTest(SongController.class) // 특정 컨트롤러만 로드
+@WebFluxTest(SongController.class)
 class SongControllerTest {
 
     @Autowired
@@ -297,7 +297,7 @@ class SongControllerTest {
         SongLikeCountDto dto1 = new SongLikeCountDto(1L, 50L);
         SongLikeCountDto dto2 = new SongLikeCountDto(2L, 30L);
 
-        given(songLikeService.getTopLikedSongs(any(Duration.class), anyInt()))
+        given(songLikeService.getTopLikedSongs(any(LocalDateTime.class), anyInt()))
                 .willReturn(Flux.just(dto1, dto2));
 
         // when & then
@@ -358,7 +358,7 @@ class SongControllerTest {
     @DisplayName("최근 1시간 내 좋아요 데이터가 없으면 빈 목록을 반환한다")
     void getTopLikedSongsEmpty() {
         // given
-        given(songLikeService.getTopLikedSongs(any(Duration.class), anyInt()))
+        given(songLikeService.getTopLikedSongs(any(LocalDateTime.class), anyInt()))
                 .willReturn(Flux.empty());
 
         // when & then
