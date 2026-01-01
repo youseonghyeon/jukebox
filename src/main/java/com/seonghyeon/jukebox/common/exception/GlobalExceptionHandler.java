@@ -22,7 +22,7 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public Mono<ErrorResponse> handleTypeMismatch(ServerWebInputException ex) {
         log.debug("Type Mismatch: {}", ex.getMessage());
-        return Mono.just(ErrorResponse.of("BAD_REQUEST", "잘못된 타입의 값이 입력되었습니다."));
+        return Mono.just(ErrorResponse.of("INVALID_INPUT_TYPE", "Invalid input type provided. Please check the parameter types."));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
@@ -55,7 +55,6 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(WebExchangeBindException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public Mono<ErrorResponse> handleValidationException(WebExchangeBindException e) {
-        // 가장 첫 번째 에러 메시지를 가져오거나, 모든 에러를 합칠 수 있습니다.
         String errorMessage = e.getBindingResult().getFieldErrors().stream()
                 .map(error -> String.format("[%s] %s", error.getField(), error.getDefaultMessage()))
                 .findFirst()
