@@ -61,7 +61,7 @@ $ docker-compose -f docker-compose-local.yml down
 
 # 기술적 의사결정 및 구현 상세
 
-### 1. 기초 데이터 처리 (Data Processing)
+### 1. 기초 데이터 처리 (Data Processing) [#1](https://github.com/youseonghyeon/jukebox/pull/1)
 
 > 기초 데이터 파일을 효율적으로 읽어 관계형 데이터베이스에 저장
 
@@ -91,7 +91,7 @@ $ docker-compose -f docker-compose-local.yml down
     * 총 적재 row: 2,490,260 rows
     * 총 처리 시간: 64,706 ms (약 1분 5초)
 
-### 2-1. 데이터 모델 설계 변경
+### 2-1. 데이터 모델 설계 변경 [#2](https://github.com/youseonghyeon/jukebox/pull/2)
 
 > 연도 & 가수별 발매 앨범 수 조회 API 개발 진행중 발견된 성능 개선을 위한 데이터 모델 설계 변경
 
@@ -104,7 +104,7 @@ $ docker-compose -f docker-compose-local.yml down
         * 기존 songs 테이블의 집계용 컬럼(release_year) 제거
         * 인덱스 제거: (artist_name, release_year desc) 복합 인덱스 제거
 
-### 2-2. API 구현
+### 2-2. API 구현 [#3](https://github.com/youseonghyeon/jukebox/pull/3)
 
 > 연도 & 가수별 발매 앨범 수 조회 API
 
@@ -124,7 +124,7 @@ $ docker-compose -f docker-compose-local.yml down
 * **처리 결과**
     * 조회 API 응답 속도: 30ms
 
-### 3. API 구현
+### 3. API 구현 [#4](https://github.com/youseonghyeon/jukebox/pull/4)
 
 > 노래별 좋아요 API
 
@@ -154,5 +154,19 @@ $ docker-compose -f docker-compose-local.yml down
             * Self-Healing: 서버 재기동 시 미처리된 Redis 스냅샷을 감지하여 DB에 반영하는 복구 로직 구현
     * **최근 1시간 동안 '좋아요' 증가 Top 10 API 구현**
         * R2DBC Flux 스트림을 활용하여 논블로킹 방식으로 Top 10 집계 쿼리 수행 후 결과 반환
+
+### 4. API 응답값 수정 및 장애 복구 개선 [#5](https://github.com/youseonghyeon/jukebox/pull/5)
+> API 응답값 수정 및 장애 복구 개선
+
+* **구현 상세**
+    * **최근 1시간 동안 '좋아요' 증가 Top 10 API 응답값 추가**
+      * AS-IS: songId와 likeCount만 반환
+      * TO-BE: songId, title, artist, album, likeCount 반환
+      * 변경 사유: 클라이언트의 추가 조회 요청 방지 및 응답값 완결성 확보
+    * **장애 복구 개선**
+      * 좋아요 메모리 버퍼링 전략 개선
+        * DB 장애 발생 시 `Snapshot` 에 대한 복구 로직 추가
+        * DB 장애 환경에서 서버 다운에 대한 Outbox 파일 백업 안정화
+    * 누락된 song_likes 테이블 FK(song_id) 제약조건 추가
 
 ---

@@ -181,7 +181,7 @@ class SongControllerTest {
                 .exchange()
                 .expectStatus().isBadRequest()
                 .expectBody()
-                .jsonPath("$.code").isEqualTo("BAD_REQUEST");
+                .jsonPath("$.code").isEqualTo("INVALID_INPUT_TYPE");
     }
 
     @Test
