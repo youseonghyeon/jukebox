@@ -25,7 +25,7 @@ jukebox:
   dataset:
     enabled: true
     location: ../data/spotify_dataset.json
-    batch-size: 5000
+    batch-size: 1000
   like:
     strategy: redis # 좋아요 쓰기 버퍼링 전략 (options: redis=분산환경, memory=단일 인스턴스)
     write-buffer:

@@ -9,6 +9,8 @@ import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.reactive.TransactionalOperator;
+import org.testcontainers.shaded.com.fasterxml.jackson.core.type.TypeReference;
+import org.testcontainers.shaded.com.fasterxml.jackson.databind.ObjectMapper;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
@@ -183,20 +185,37 @@ class MemoryLikeWriteStrategyTest {
         assertThat(files).isNotNull().isNotEmpty();
     }
 
+    /**
+     * 실제 테스트 순서: 서버 기동 -> 좋아요 추가(DB 반영 안함) -> DB 종료 -> 서버 종료 -> onDestroy 호출 -> flushToDatabase 실패 -> 임시 디렉토리에 백업 파일 생성
+     */
     @Test
-    @DisplayName("종료 시 DB Flush 실패하면 임시 디렉토리에 백업한다")
-    void backupOnDestroyFailure() {
+    @DisplayName("종료 시 DB Flush 실패하면 임시 디렉토리에 백업하고 데이터 정합성을 확인한다")
+    void backupOnDestroyFailure() throws IOException {
         // given
-        strategy.addLike(50L).block();
+        Long songId = 50L;
+        Long likeCount = 1L;
+        strategy.addLike(songId).block();
+
         // onDestroy 내의 flushToDatabase가 실패하도록 설정
         given(likeBatchWriter.apply(any())).willReturn(Mono.error(new RuntimeException("Shutdown DB Error")));
 
         // when
         strategy.onDestroy();
 
-        // then: 임시 디렉토리에 백업 파일이 있어야 함
-        File[] files = tempDir.toFile().listFiles();
-        assertThat(files).isNotNull().isNotEmpty();
-        assertThat(files[0].getName()).startsWith("backup-");
+        // then 1: 임시 디렉토리에 백업 파일이 생성되었는지 확인
+        File[] files = tempDir.toFile().listFiles((dir, name) -> name.startsWith("backup-"));
+        assertThat(files).isNotNull().hasSize(1);
+
+        File backupFile = files[0];
+
+        // then 2: 파일 내용(데이터 정합성) 검증
+        // ObjectMapper를 사용하여 파일 내용을 Map으로 읽어옴
+        ObjectMapper objectMapper = new ObjectMapper();
+        Map<String, Integer> backupData = objectMapper.readValue(backupFile, new TypeReference<>() {});
+
+        // 저장했던 songId와 count가 일치하는지 확인
+        // JSON Key는 기본적으로 String으로 저장되므로 "50"으로 체크
+        assertThat(backupData).containsKey(String.valueOf(songId));
+        assertThat(backupData.get(String.valueOf(songId))).isEqualTo(likeCount.intValue());
     }
 }

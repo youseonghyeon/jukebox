@@ -10,7 +10,7 @@ public record LikeRequest(
         Long userId,
 
         @Schema(description = "액션 (LIKE 또는 UNLIKE)", example = "LIKE")
-        @NotNull(message = "액션(LIKE/UNLIKE)은 필수입니다.")
+        @NotNull(message = "값이 누락되었거나 잘못되었습니다. 'LIKE' 또는 'UNLIKE' 중 하나를 입력해야 합니다.")
         Action action
 ) {
 }
