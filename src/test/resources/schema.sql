@@ -88,7 +88,10 @@ create table song_likes
     song_id    bigint      not null comment '노래 id',
     user_id    bigint      not null comment '사용자 id',
     action     varchar(20) not null comment 'like 또는 unlike',
-    created_at datetime(6) not null default current_timestamp(6) comment '생성 일시'
+    created_at datetime(6) not null default current_timestamp(6) comment '생성 일시',
+    constraint fk_song_likes_song_id
+        foreign key (song_id) references songs (id)
+            on delete cascade
 );
 
 create index idx_song_likes_song_id_user_id

@@ -10,3 +10,4 @@ jukebox:
 logging:
   level:
     com.seonghyeon.jukebox: DEBUG
+    org.springframework.data.r2dbc: DEBUG

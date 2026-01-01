@@ -294,8 +294,8 @@ class SongControllerTest {
     @DisplayName("최근 1시간 내 최다 좋아요 곡 10개를 조회한다")
     void getTopLikedSongsSuccess() {
         // given
-        SongLikeCountDto dto1 = new SongLikeCountDto(1L, 50L);
-        SongLikeCountDto dto2 = new SongLikeCountDto(2L, 30L);
+        SongLikeCountDto dto1 = new SongLikeCountDto(1L, "통화연결음","써니사이드", "리메이크", 50L);
+        SongLikeCountDto dto2 = new SongLikeCountDto(2L, "통화연결음","보라미유", "리메이크",30L);
 
         given(songLikeService.getTopLikedSongs(any(LocalDateTime.class), anyInt()))
                 .willReturn(Flux.just(dto1, dto2));
