@@ -13,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
@@ -73,8 +74,12 @@ public class MemoryLikeWriteStrategy extends LikeWriteStrategy {
                         log.info("[MemoryStrategy] Flush completed: {} songs updated in {}ms", targetCount, duration);
                     })
                     .doOnError(e -> {
-                        log.error("[MemoryStrategy] Flush failed! Data lost potential for {} songs. Error: {}", targetCount, e.getMessage(), e);
-                        // TODO 재시도 또는 백업 로직 추가
+                        log.error("[MemoryStrategy] DB Flush failed! Rolling back to buffer. Error: {}", e.getMessage());
+                        // 버퍼 원복: 현재 다시 쌓이고 있는 currentBuffer에 실패한 스냅샷을 다시 합침 (롤백)
+                        snapshot.forEach((songId, count) -> {
+                            currentBuffer.get().computeIfAbsent(songId, k -> new LongAdder()).add(count);
+                        });
+                        log.warn("[MemoryStrategy] Successfully rolled back {} items to buffer.", targetCount);
                     });
         });
     }
@@ -82,15 +87,19 @@ public class MemoryLikeWriteStrategy extends LikeWriteStrategy {
     @PreDestroy
     public void onDestroy() {
         log.info("Shutting down LikeWriteStrategy, flushing likes to database...");
-        try {
-            flushToDatabase().block();
-            log.info("Successfully flushed likes to database during shutdown.");
-        } catch (Exception error) {
-            log.error("Error occurred while flushing likes to database during shutdown", error);
-            ConcurrentHashMap<Long, LongAdder> rawSnapshot = currentBuffer.getAndSet(new ConcurrentHashMap<>());
-            Map<Long, Long> snapshot = summarizeSnapshot(rawSnapshot);
-            saveToOutboxFile(snapshot);
-        }
+
+        flushToDatabase()
+                .doOnSuccess(v -> log.info("Successfully flushed likes to database during shutdown."))
+                .onErrorResume(error -> {
+                    log.error("Error occurred while flushing likes to database during shutdown, saving to outbox file", error);
+
+                    // 버퍼 스냅샷 추출 및 파일 저장
+                    ConcurrentHashMap<Long, LongAdder> rawSnapshot = currentBuffer.getAndSet(new ConcurrentHashMap<>());
+                    Map<Long, Long> snapshot = summarizeSnapshot(rawSnapshot);
+                    saveToOutboxFile(snapshot);
+                    return Mono.empty(); // 에러를 삼키고 정상 종료 흐름 유지
+                })
+                .block(Duration.ofSeconds(10));
     }
 
     private void saveToOutboxFile(Map<Long, Long> snapshot) {
